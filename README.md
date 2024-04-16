@@ -23,6 +23,7 @@ torchrun --nproc_per_node 1 ./generate_prompt/example_chat_completion.py --ckpt_
 
 ## Generate synthetic images (Inference)
 Pre-trained stable diffusion (SD) parameters can be used to generate synthetic images for training classification models.
+**SD**: You can download pre-trained SD parameters on [Hugging face](https://huggingface.co/stabilityai/stable-diffusion-2). Moveing all files into `<./generate_image_coco>/stabilityai/stable-diffusion-2` and `<./generate_image_nus>/stabilityai/stable-diffusion-2` for using in the inference and fine-tuning.
 ### coco
 ```
 CUDA_VISIBLE_DEVICES=0 python ./generate_image_coco/inference.py --outdir ./generate_image_coco/all_result/inference --prompt_path ./generate_image_coco/prompt_coco/ --ckpt_dir <path to fine-tuned text encoder weight> -mmln=2 -test_scale=768 -steps=50 -syn_num=200
