@@ -76,6 +76,7 @@ Dataset
 ```
 CUDA_VISIBLE_DEVICES=0 python ./classification_coco/train_zsl.py --config_file ./classification_coco/configs/models/rn50_ep50.yaml --datadir <path to dataset> --dataset_config_file ./classification_coco/configs/datasets/coco.yaml --input_size 224 --lr 0.002  --loss_w 0.01  --n_ctx_pos 64 --n_ctx_neg 64 --train_batch_size 32
 ```
+
 ### nus
 ```
 CUDA_VISIBLE_DEVICES=0 python ./classification_nus/train_zsl.py --config_file ./classification_nus/configs/models/rn50_ep50.yaml --datadir <path to dataset> --dataset_config_file ./classification_nus/configs/datasets/nus_wide_zsl.yaml --input_size 224 --lr 0.0005 --loss_w 0.01 --n_ctx_pos 64 --n_ctx_neg 64 --train_batch_size 96
