@@ -1,0 +1,183 @@
+import torch
+import os
+# from einops import repeat
+import time
+import argparse
+import random
+import json
+from src.model.model import Diffusion_Clip
+from src.helper_functions.helper_functions import remove_duplication
+from clip_classification import ClipPipeline, get_label_list
+from diffusers_local.trunk.src.diffusers.pipelines.stable_diffusion.pipeline_stable_diffusion import StableDiffusionPipeline
+from diffusers import EulerDiscreteScheduler
+import torch.nn as nn
+from torch.cuda.amp import GradScaler, autocast
+import logging
+import random
+from itertools import product
+import os
+import numpy as np
+
+if __name__ == "__main__":    
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--outdir", type=str, default="./result",
+                    nargs="?", help="dir to write results to")
+    parser.add_argument("--prompt_path", type=str,
+                    nargs="?", help="dir to write results to")
+    parser.add_argument("--ckpt_dir", type=str,
+                    nargs="?", help="dir to write results to")
+    parser.add_argument("-steps", type=int,default=50,
+                    help="number of ddim sampling steps")
+    parser.add_argument("-d", "--device", default="cuda", 
+                    help="computation device to use", choices=["cpu", "cuda"])
+    parser.add_argument('-mmln', '--max-mulit-label-num', default=2, type=int,
+                    metavar='N', help='synthitc image label number')
+    parser.add_argument('-syn_num', '--syn-num', default=20, type=int,
+                    metavar='N', help='synthitc per class number')
+    parser.add_argument('-test_scale', '--test-scale', default=768, type=int,
+                    metavar='N', help='synthitc per class number')
+    
+    opt = parser.parse_args()
+    
+    all_label = get_label_list()
+    categories_id = {
+        "clouds": 0, "bridge": 10, "sports": 21, "protest": 41, "rocks": 59, "nighttime": 70, "surf": 78, "leaf": 85, "beach": 92,
+        "sky": 110, "toy": 112, "sand": 122, "tiger": 138, "railroad": 144, "flowers": 148, "fire": 173, "snow": 183, "garden": 188,
+        "sun": 196, "food": 222, "tower": 235, "elk": 241, "street": 243, "train": 258, "running": 263, "fox": 266, "military": 270,
+        "moon": 272, "fish": 278, "map": 283, "town": 306, "water": 314, "sunset": 323, "temple": 349, "bear": 353, "tree": 358,
+        "cityscape": 384, "book": 387, "sign": 389, "house": 396, "vehicle": 397, "police": 402, "buildings": 417, "boats": 419, "cars": 434,
+        "tattoo": 444, "rainbow": 446, "waterfall": 459, "earthquake": 484, "cow": 504, "horses": 509, "glacier": 514, "plants": 535, "animal": 538,
+        "whales": 558, "plane": 563, "swimmers": 579, "window": 601, "person": 632, "cat": 648, "wedding": 656, "statue": 694, "harbor": 701,
+        "mountain": 715, "birds": 721, "valley": 751, "flags": 755, "road": 769, "dancing": 787, "frost": 799, "castle": 802, "dog": 815,
+        "ocean": 823, "grass": 831, "computer": 836, "zebra": 848, "reflection": 874, "coral": 906, "lake": 962, "soccer": 973, "airport": 1003}
+    
+    images_num = {
+        "clouds": 1, "bridge": 1, "sports": 1, "protest": 1, "rocks": 1, "nighttime": 1, "surf": 1, "leaf": 1, "beach": 1,
+        "sky": 1, "toy": 1, "sand": 1, "tiger": 1, "railroad": 1, "flowers": 1, "fire": 1, "snow": 1, "garden": 1,
+        "sun": 1, "food": 1, "tower": 1, "elk": 1, "street": 1, "train": 1, "running": 1, "fox": 1, "military": 1,
+        "moon": 1, "fish": 1, "map": 1, "town": 1, "water": 1, "sunset": 1, "temple": 1, "bear": 1, "tree": 1,
+        "cityscape": 1, "book": 1, "sign": 1, "house": 1, "vehicle": 1, "police": 1, "buildings": 1, "boats": 1, "cars": 1,
+        "tattoo": 1, "rainbow": 1, "waterfall": 1, "earthquake": 1, "cow": 1, "horses": 1, "glacier": 1, "plants": 1, "animal": 1,
+        "whales": 1, "plane": 1, "swimmers": 1, "window": 1, "person": 1, "cat": 1, "wedding": 1, "statue": 1, "harbor": 1,
+        "mountain": 1, "birds": 1, "valley": 1, "flags": 1, "road": 1, "dancing": 1, "frost": 1, "castle": 1, "dog": 1,
+        "ocean": 1, "grass": 1, "computer": 1, "zebra": 1, "reflection": 1, "coral": 1, "lake": 1, "soccer": 1, "airport": 1}
+    
+    class_relationship = {
+        'person': ['military', 'police', 'swimmers'],
+        'vehicle': ['train', 'boats', 'cars', 'plane'],
+        'sports': ['surf', 'running', 'dancing', 'soccer'],
+        'plants': ['flowers', 'tree', 'leaf'],
+        'cityscape': ['garden', 'street', 'town'],
+        'water': ['ocean', 'lake', 'waterfall'],
+        'buildings': ['bridge', 'airport', 'tower', 'temple', 'house', 'castle'],
+        'animal': ['cat', 'fox', 'fish', 'bear', 'cow', 'birds', 'dog', 'zebra', 'tiger', 'elk', 'horses', 'whales'],
+    }
+    
+    # load prompt
+    label_list = get_label_list()
+    label_pair = list(product(label_list, repeat=2))
+    path = opt.prompt_path
+    prompt_dict = {}
+    while (len(label_pair) != 0):
+        label = list(label_pair[0])
+        label_pair.pop(0)
+
+        file_name = label[0] + '_' + label[1]
+        full_path = path + file_name + '.txt'
+
+        if os.path.exists(full_path):
+            prompt_dict[file_name] = []
+            file = open(full_path, 'r')
+            for line in file:
+                prompt_dict[file_name].append(line.strip())
+        else:
+            continue
+        
+    """init diffusion and clip models"""
+    clip_pipeline = ClipPipeline(device=opt.device).to(torch.float32)
+    
+    scheduler = EulerDiscreteScheduler.from_pretrained("./generate_image_coco/stabilityai/stable-diffusion-2", subfolder="scheduler")
+    diffusion_pipeline = StableDiffusionPipeline.from_pretrained(
+        "./generate_image_coco/stabilityai/stable-diffusion-2", 
+        scheduler=scheduler, 
+        torch_dtype=torch.float32
+    ).to(opt.device)
+    
+    model = Diffusion_Clip(opt, clip_pipeline, diffusion_pipeline, prompt_dict)
+    model.to(opt.device)
+
+    print("----------------- Loading model -----------------")
+    if os.path.exists(full_path):
+        param_dict = torch.load(opt.ckpt_dir)
+        model.diffusion_pipeline.text_encoder.load_state_dict(param_dict)
+        print("Loading successfully")
+    else:
+        print("The encoder parameter does not exist, use the default parameter")
+    
+    print("-------------Begin inpainting-------------")
+    start = time.time()
+    os.makedirs(opt.outdir, exist_ok=True)
+    os.makedirs(opt.outdir + '/all', exist_ok=True)
+    os.makedirs(opt.outdir + '/select', exist_ok=True)
+    num = 100000
+    
+    formatted_syn_images_filtered = []
+    formatted_syn_labels_filtered = []
+
+    model.eval()
+    while(all_label):
+        exit_ef = True
+        while(exit_ef):
+            classes = []
+            for i in range(opt.max_mulit_label_num):
+                classes.append(random.choice(all_label))
+            classes = remove_duplication(classes)
+            exit_ef = False
+        
+        image_name = classes[0]
+        for i in range(len(classes)):
+            if i != 0:
+                image_name = image_name + "_" + classes[i]
+        
+        with torch.no_grad():
+            with autocast():
+                output, label, confidence, image = model(classes, image_name, num, len(classes), opt.test_scale, opt.steps)
+        
+        # save image
+        if [False for item in classes if item not in label] == []:
+            try:
+                file_name = str(num)
+                image.save(opt.outdir + "/select/" + file_name +".jpg")
+                print("Saving: " + file_name + ".jpg")
+            except:
+                print("Saving error!")
+                continue
+            formatted_syn_images_filtered.append(file_name + ".jpg")
+            for key in class_relationship.keys():
+                for item in label:
+                    if item in class_relationship[key]:
+                        label.append(key)
+            label = remove_duplication(label)
+            labels = np.zeros(1006, dtype=int)
+            for i in range(len(label)):
+                labels[categories_id[label[i]]] = 1
+                if images_num[label[i]] == opt.syn_num and label[i] in all_label:
+                    all_label.remove(label[i])
+                else:
+                    images_num[label[i]] += 1
+            formatted_syn_labels_filtered.append(labels.tolist())
+        else:
+            print("Not saving!")
+        num += 1
+        print("===================================================")
+        if num % 100 == 0:
+            print(images_num)
+    
+    
+    formatted_syn_labels_filtered = np.array(formatted_syn_labels_filtered)
+    np.save(opt.outdir + '/formatted_syn_labels_filtered.npy', formatted_syn_labels_filtered)
+    formatted_syn_images_filtered = np.array(formatted_syn_images_filtered)
+    np.save(opt.outdir + '/formatted_syn_images_filtered.npy', formatted_syn_images_filtered)
+    
+    end = time.time()
+    print(f"Total time: {end - start}")
