@@ -50,7 +50,7 @@ CUDA_VISIBLE_DEVICES=0 python ./generate_image_nus/inpainting_diff.py --outdir .
 48 seen classes and 17 unseen classes. We provide the json files of the seen and unseen annotations on [Google Drive](https://drive.google.com/file/d/154dkD7Ok1xxwTZb7hQTAf3FlNCN8Q6KM/view?usp=sharing). Download and move all files into `<coco_dataroot>/annotations/` for using in the training and inference.
 
 
-**NUS-WIDE**: Following [2, 3] we use 81 human-annotated categories as unseen classes and an additional set of 925 labels
+**NUS-WIDE**: Following [2], we use 81 human-annotated categories as unseen classes and an additional set of 925 labels
 obtained from Flickr tags as seen classes. We provide the class split on [Google Drive](https://drive.google.com/file/d/17pt25ed0qPvjjidVa_goAuH9PnS2lIfs/view?usp=sharing). Download and move those folders  into `<nus_wide_dataroot>/annotations/` for using in the training and inference.
 
 ### Dataset file
