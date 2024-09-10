@@ -90,10 +90,12 @@ CUDA_VISIBLE_DEVICES=0 python ./classification_nus/train_zsl.py --config_file ./
 ## Citation
 ```
 @article{zhang2024diverse,
-  title={Diverse and Tailored Image Generation for Zero-shot Multi-label Classification},
+  title={Diverse and tailored image generation for zero-shot multi-label classification},
   author={Zhang, Kaixin and Yuan, Zhixiang and Huang, Tao},
-  journal={arXiv preprint arXiv:2404.03144},
-  year={2024}
+  journal={Knowledge-Based Systems},
+  pages={112077},
+  year={2024},
+  publisher={Elsevier}
 }
 ```
 ## Reference
