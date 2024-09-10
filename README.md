@@ -10,6 +10,9 @@ Recently, zero-shot multi-label classification has garnered considerable attenti
 
 ![framework](figures/framework3.png)
 
+## News
+Our paper is accepted by Knowledge-Based Systems!
+
 ## Generate text prompts
 We have provided ready-to-use text prompts in `<./generate_image_coco>/prompt_coco` and `<./generate_image_nus>/prompt_nus`, so there is no need to generate them again.
 ### coco
